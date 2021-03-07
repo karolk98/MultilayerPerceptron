@@ -3,6 +3,7 @@ from enum import Enum
 import pandas as pd
 from numpy import *
 
+
 class Perceptron:
     class ProblemType(Enum):
         Classification = 1
@@ -29,15 +30,19 @@ class Perceptron:
 
     def initialize(self):
         self.classes = self.classes if self.classes is not None else len(self.traindata['cls'].unique())
-        self.data_dim = len(self.traindata.columns)-1
-        self.hidden_layer_size = self.hidden_layer_size if self.hidden_layer_size is not None else int((self.data_dim + self.classes) / 2)
+        self.data_dim = len(self.traindata.columns) - 1
+        self.hidden_layer_size = self.hidden_layer_size if self.hidden_layer_size is not None else int(
+            (self.data_dim + self.classes) / 2)
         layer_sizes = [self.data_dim]
         layer_sizes.extend([self.hidden_layer_size for x in range(self.hidden_layers)])
         layer_sizes.append(self.classes)
         self.layers = []
         for index, size in enumerate(layer_sizes[1:]):
-            layer = array([[index]*layer_sizes[index]]*size)
+            size_prev = layer_sizes[index]
+            layer = array([[np.random.randn(size, size_prev) * np.sqrt(2 / size_prev)] * size_prev] * size)
             self.layers.append(layer)
+        if self.bias:
+            self.biases = [0]*(self.hidden_layers+1)
 
     def learn(self):
         pass
