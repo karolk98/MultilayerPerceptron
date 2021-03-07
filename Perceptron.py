@@ -39,7 +39,7 @@ class Perceptron:
         self.layers = []
         for index, size in enumerate(layer_sizes[1:]):
             size_prev = layer_sizes[index]
-            layer = array([[np.random.randn(size, size_prev) * np.sqrt(2 / size_prev)] * size_prev] * size)
+            layer = array([[random.randn(size, size_prev) * sqrt(2 / size_prev)] * size_prev] * size)
             self.layers.append(layer)
         if self.bias:
             self.biases = [0]*(self.hidden_layers+1)
