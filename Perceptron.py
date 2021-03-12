@@ -68,7 +68,7 @@ class Perceptron:
             layer = np.random.randn(size, size_prev) * np.sqrt(2 / size_prev)
             self.layers.append(layer)
             if self.bias:
-                self.biases.append(np.zeros((size, 1)))
+                self.biases.append(np.zeros(size))
 
     def train(self):
         self.initialize()
@@ -79,7 +79,7 @@ class Perceptron:
         for epoch in range(0, self.epochs):
             batch_start = 0
             while batch_start < len(samples):
-                batch_end = min(batch_start+self.batch_size, len(samples))
+                batch_end = min(batch_start + self.batch_size, len(samples))
 
                 batch_size = batch_end-batch_start
                 new_gradients = []
@@ -95,7 +95,7 @@ class Perceptron:
                         new_gradients = [np.add(new_gradients[idx], mth_gradients[idx]) for idx in range(len(new_gradients))]
 
                 new_gradients = [gradient/batch_size for gradient in new_gradients]
-                if len(gradients)==0:
+                if len(gradients) == 0:
                     gradients = new_gradients
                 else:
                     gradients = [np.add(gradients[idx]*self.momentum, new_gradients[idx]*(1-self.momentum)) for idx in range(len(new_gradients))]
@@ -110,6 +110,8 @@ class Perceptron:
         activated = [batch]
         for idx, layer in enumerate(self.layers):
             output = np.matmul(layer, output)
+            if self.bias:
+                output = output + self.biases[idx]
             y.append(output)
             if idx == len(self.layers) - 1:
                 output = self.final(output)
@@ -122,13 +124,19 @@ class Perceptron:
         dLoss = self.dLoss(activated[-1], desired)
         gradients = []
         ygradient = np.multiply(dLoss, self.dFinal(ys[-1]))
-        gradient = np.outer(ygradient, activated[-2])
+        if self.bias:
+            gradient = np.outer(ygradient, np.append(activated[-2], 1))
+        else:
+            gradient = np.outer(ygradient, activated[-2])
         gradients.append(gradient)
 
         for i in range(len(self.layers) - 2, -1, -1):
             next_layer = self.layers[i + 1]
             ygradient = np.multiply(np.matmul(next_layer.T, ygradient), self.dActivation(ys[i + 1]))
-            gradient = np.outer(ygradient, activated[i])
+            if self.bias:
+                gradient = np.outer(ygradient, np.append(activated[i], 1))
+            else:
+                gradient = np.outer(ygradient, activated[i])
             gradients.append(gradient)
 
         gradients = gradients[::-1]
@@ -136,7 +144,11 @@ class Perceptron:
 
     def apply_gradient(self, gradients):
         for i in range(len(self.layers)):
-            self.layers[i] = np.subtract(self.layers[i], self.learning_rate*gradients[i])
+            if self.bias:
+                self.layers[i] = np.subtract(self.layers[i], self.learning_rate * gradients[i][:, :-1])
+                self.biases[i] = np.subtract(self.biases[i], self.learning_rate * gradients[i][:, -1])
+            else:
+                self.layers[i] = np.subtract(self.layers[i], self.learning_rate * gradients[i])
 
     def test(self, path):
         testdata = pd.read_csv(path)
@@ -145,22 +157,18 @@ class Perceptron:
         counter = 0
         for i, sample in enumerate(samples):
             desired_out = classes[i]
-            y = sample
-            for idx, layer in enumerate(self.layers):
-                y = np.matmul(layer, y.T)
-                if idx == len(self.layers) - 1:
-                    y = self.final(y)
-                else:
-                    y = self.activation(y)
+            y, _ = self.forward(sample)
 
-            predicted = np.argmax(y, axis=0)+1
+            predicted = np.argmax(y[-1], axis=0)+1
             if predicted == desired_out:
                 counter += 1
 
         print(counter/len(samples))
 
 
-perceptron = Perceptron(hidden_layers=[2, 2], batch_size=1, epochs=1)
-perceptron.load(r"C:\Users\Karol\Downloads\project-1-part-1-data\project-1-part-1-data\data.simple.train.10000.csv")
-perceptron.train()
-perceptron.test(r"C:\Users\Karol\Downloads\project-1-part-1-data\project-1-part-1-data\data.simple.test.10000.csv")
+if __name__ == "__main__":
+    np.random.seed(676)
+    perceptron = Perceptron(hidden_layers=[2, 3], batch_size=10, epochs=1, bias=True)
+    perceptron.load(r"C:\Users\Potato\Downloads\project-1-part-1-data\project-1-part-1-data\data.simple.train.10000.csv")
+    perceptron.train()
+    perceptron.test(r"C:\Users\Potato\Downloads\project-1-part-1-data\project-1-part-1-data\data.simple.test.10000.csv")
