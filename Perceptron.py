@@ -2,6 +2,7 @@
 from enum import Enum
 import pandas as pd
 import numpy as np
+from sklearn.utils import shuffle
 
 def ReLU(z):
     return np.maximum(0, z)
@@ -54,6 +55,7 @@ class Perceptron:
 
     def load(self, path):
         self.traindata = pd.read_csv(path)
+        self.traindata = shuffle(self.traindata)
 
     def initialize(self):
         self.classes = self.classes if self.classes is not None else len(self.traindata['cls'].unique())
@@ -65,7 +67,7 @@ class Perceptron:
         self.biases = []
         for index, size in enumerate(layer_sizes[1:]):
             size_prev = layer_sizes[index]
-            layer = np.random.randn(size, size_prev) * np.sqrt(2 / size_prev)
+            layer = np.random.randn(size, size_prev) * 0.01
             self.layers.append(layer)
             if self.bias:
                 self.biases.append(np.zeros(size))
@@ -74,7 +76,6 @@ class Perceptron:
         self.initialize()
         samples = self.traindata.iloc[:, 0:-1].values
         classes = self.traindata.iloc[:, -1].values
-
         gradients = []
         for epoch in range(0, self.epochs):
             batch_start = 0
@@ -139,6 +140,7 @@ class Perceptron:
                 gradient = np.outer(ygradient, activated[i])
             gradients.append(gradient)
 
+
         gradients = gradients[::-1]
         return gradients
 
@@ -157,9 +159,9 @@ class Perceptron:
         counter = 0
         for i, sample in enumerate(samples):
             desired_out = classes[i]
-            y, _ = self.forward(sample)
+            y, act = self.forward(sample)
 
-            predicted = np.argmax(y[-1], axis=0)+1
+            predicted = np.argmax(act[-1], axis=0)+1
             if predicted == desired_out:
                 counter += 1
 
@@ -167,8 +169,8 @@ class Perceptron:
 
 
 if __name__ == "__main__":
-    np.random.seed(676)
-    perceptron = Perceptron(hidden_layers=[2, 3], batch_size=10, epochs=1, bias=True)
-    perceptron.load(r"C:\Users\Potato\Downloads\project-1-part-1-data\project-1-part-1-data\data.simple.train.10000.csv")
+    np.random.seed(1)
+    perceptron = Perceptron(hidden_layers=[8], batch_size=50, epochs=1, bias=True)
+    perceptron.load(r"C:\Users\Potato\Downloads\project-1-part-1-data\project-1-part-1-data\data.three_gauss.train.10000.csv")
     perceptron.train()
-    perceptron.test(r"C:\Users\Potato\Downloads\project-1-part-1-data\project-1-part-1-data\data.simple.test.10000.csv")
+    perceptron.test(r"C:\Users\Potato\Downloads\project-1-part-1-data\project-1-part-1-data\data.three_gauss.test.10000.csv")
