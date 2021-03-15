@@ -43,12 +43,23 @@ def dTanh(z):
     return 1 - (np.tanh(z) ** 2)
 
 
-def quad(y1, y2):
-    return np.sum((y1 - y2) ** 2)
+def MSE(y1, y2):
+    return np.sum((y1 - y2) ** 2)/len(y1)
 
 
-def dQuad(y1, y2):
+def dMSE(y1, y2):
     return 2 * (y1 - y2)
+
+
+def MAE(y1, y2):
+    return np.sum(np.abs(y1-y2))/len(y1)
+
+
+def dMAE(y1, y2):
+    y = y1 - y2
+    for i in range(len(y)):
+        y[i] = 1 if y[i] >= 0 else -1
+    return y
 
 
 class Perceptron:
@@ -57,7 +68,7 @@ class Perceptron:
         Regression = 2
 
     def __init__(self, problem_type=ProblemType.Classification, classes=None, hidden_layers=[2, 2],
-                 activation=sigmoid, dActivation=dSigmoid, loss=quad, dLoss=dQuad, final=sigmoid, dFinal=dSigmoid,
+                 activation=sigmoid, dActivation=dSigmoid, loss=MSE, dLoss=dMSE, final=sigmoid, dFinal=dSigmoid,
                  SM_CE=False, bias=False,
                  batch_size=1000, epochs=10, learning_rate=0.001, momentum=0.1):
         self.problem_type = problem_type
@@ -262,6 +273,7 @@ def draw_classification(network, path):
             _, _, ans = network.forward([xi, yj])
             res[j, i] = np.argmax(ans, axis=0)
     plt.pcolor(xm, ym, res,
+               shading='auto',
                cmap=matplotlib.colors.ListedColormap(colors),
                alpha=0.4, snap=True)
 
