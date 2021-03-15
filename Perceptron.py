@@ -4,29 +4,48 @@ import pandas as pd
 import numpy as np
 from sklearn.utils import shuffle
 
+import matplotlib.pyplot as plt
+import matplotlib
+
+
+def Mirror(x):
+    return x
+
+
+def dMirror(x):
+    return 1
+
+
 def ReLU(z):
     return np.maximum(0, z)
+
 
 def sigmoid(z):
     return 1. / (1. + np.exp(-z))
 
+
 def tanh(z):
     return np.tanh(z)
+
 
 def dReLU(z):
     return (z > 0) * 1
 
+
 def dSigmoid(z):
     return sigmoid(z) * (1 - sigmoid(z))
+
 
 def dTanh(z):
     return 1 / (np.tanh(z) ** 2)
 
+
 def quad(y1, y2):
-    return np.sum((y1-y2)**2)
+    return np.sum((y1 - y2) ** 2)
+
 
 def dQuad(y1, y2):
-    return 2*(y1-y2)
+    return 2*(y1 - y2)
 
 
 class Perceptron:
@@ -37,7 +56,7 @@ class Perceptron:
     def __init__(self, problem_type=ProblemType.Classification, classes=None, hidden_layers=[2, 2],
                  activation=sigmoid, dActivation=dSigmoid, loss=quad, dLoss=dQuad, final=sigmoid, dFinal=dSigmoid,
                  bias=False,
-                 batch_size=1000, epochs=10, learning_rate=0.5, momentum=0.5):
+                 batch_size=1000, epochs=10, learning_rate=0.001, momentum=0.1):
         self.problem_type = problem_type
         self.classes = classes if problem_type == self.ProblemType.Classification else 1
         self.hidden_layers = hidden_layers
@@ -67,7 +86,7 @@ class Perceptron:
         self.biases = []
         for index, size in enumerate(layer_sizes[1:]):
             size_prev = layer_sizes[index]
-            layer = np.random.randn(size, size_prev) * 0.01
+            layer = np.random.randn(size, size_prev)
             self.layers.append(layer)
             if self.bias:
                 self.biases.append(np.zeros(size))
@@ -82,24 +101,31 @@ class Perceptron:
             while batch_start < len(samples):
                 batch_end = min(batch_start + self.batch_size, len(samples))
 
-                batch_size = batch_end-batch_start
+                batch_size = batch_end - batch_start
                 new_gradients = []
 
                 for m in range(batch_start, batch_end):
-                    y, activated = self.forward(samples[m])
+                    y, activated, _ = self.forward(samples[m])
                     desired_out = np.zeros(self.classes)
-                    desired_out[classes[m]-1] = 1
+
+                    if self.problem_type == self.ProblemType.Classification:
+                        desired_out[classes[m] - 1] = 1
+                    else:
+                        desired_out[0] = classes[m]
+
                     mth_gradients = self.gradient(y, activated, desired_out)
                     if m == batch_start:
                         new_gradients = mth_gradients
                     else:
-                        new_gradients = [np.add(new_gradients[idx], mth_gradients[idx]) for idx in range(len(new_gradients))]
+                        new_gradients = [np.add(new_gradients[idx], mth_gradients[idx]) for idx in
+                                         range(len(new_gradients))]
 
-                new_gradients = [gradient/batch_size for gradient in new_gradients]
+                new_gradients = [gradient / batch_size for gradient in new_gradients]
                 if len(gradients) == 0:
                     gradients = new_gradients
                 else:
-                    gradients = [np.add(gradients[idx]*self.momentum, new_gradients[idx]*(1-self.momentum)) for idx in range(len(new_gradients))]
+                    gradients = [np.add(gradients[idx] * self.momentum, new_gradients[idx] * (1 - self.momentum)) for
+                                 idx in range(len(new_gradients))]
 
                 self.apply_gradient(gradients)
 
@@ -119,7 +145,8 @@ class Perceptron:
             else:
                 output = self.activation(output)
             activated.append(output)
-        return y, activated
+            result = activated[-1]
+        return y, activated, result
 
     def gradient(self, ys, activated, desired):
         dLoss = self.dLoss(activated[-1], desired)
@@ -140,7 +167,6 @@ class Perceptron:
                 gradient = np.outer(ygradient, activated[i])
             gradients.append(gradient)
 
-
         gradients = gradients[::-1]
         return gradients
 
@@ -159,18 +185,62 @@ class Perceptron:
         counter = 0
         for i, sample in enumerate(samples):
             desired_out = classes[i]
-            y, act = self.forward(sample)
+            y, act, result = self.forward(sample)
 
-            predicted = np.argmax(act[-1], axis=0)+1
+            predicted = np.argmax(result, axis=0) + 1
             if predicted == desired_out:
                 counter += 1
 
-        print(counter/len(samples))
+        print(counter / len(samples))
 
+    def test_regression(self, path):
+        testdata = pd.read_csv(path)
+        args = testdata.iloc[:, 0:-1].values
+        values = testdata.iloc[:, -1].values
+        predicted_values = []
+        for i, sample in enumerate(args):
+            y, act, result = self.forward(sample)
+            predicted_values.append(result)
+
+        plt.scatter(args, predicted_values)
+        plt.show()
+
+
+def draw_classes(network, path):
+    samples = pd.read_csv(path)
+    samples = shuffle(samples)
+    x = samples.iloc[:, 0]
+    y = samples.iloc[:, 1]
+    classes = samples.iloc[:, 2]
+    colors = ['red', 'blue', 'green']
+    xlin = np.linspace(-2, 2, 100)
+    ylin = np.linspace(-2, 2, 100)
+    xm, ym = np.meshgrid(xlin, ylin)
+    res = np.zeros((xlin.shape[0], ylin.shape[0]), dtype=int)
+    for i, xi in enumerate(xlin[:-1]):
+        for j, yj in enumerate(ylin[:-1]):
+            _, _, ans = network.forward([xi, yj])
+            res[j, i] = np.argmax(ans, axis=0)
+    plt.pcolormesh(xm, ym, res,
+                   cmap=matplotlib.colors.ListedColormap(colors),
+                   alpha=0.2)
+    plt.scatter(x, y, c=classes, cmap=matplotlib.colors.ListedColormap(colors))
+    plt.show()
 
 if __name__ == "__main__":
     np.random.seed(1)
-    perceptron = Perceptron(hidden_layers=[8], batch_size=50, epochs=1, bias=True)
-    perceptron.load(r"C:\Users\Potato\Downloads\project-1-part-1-data\project-1-part-1-data\data.three_gauss.train.10000.csv")
-    perceptron.train()
-    perceptron.test(r"C:\Users\Potato\Downloads\project-1-part-1-data\project-1-part-1-data\data.three_gauss.test.10000.csv")
+    mlp = Perceptron(problem_type=Perceptron.ProblemType.Classification,
+                     hidden_layers=[4],
+                     activation=sigmoid,
+                     dActivation=dSigmoid,
+                     final=sigmoid,
+                     dFinal=dSigmoid,
+                     batch_size=3,
+                     learning_rate=0.5,
+                     momentum=0.1,
+                     epochs=4,
+                     bias=True)
+    mlp.load("data\data.three_gauss.train.10000.csv")
+    mlp.train()
+    mlp.test("data\data.three_gauss.test.10000.csv")
+    draw_classes(mlp, "data\data.three_gauss.test.10000.csv")
