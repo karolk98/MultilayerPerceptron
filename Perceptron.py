@@ -78,6 +78,7 @@ class Perceptron:
         self.traindata = shuffle(self.traindata)
 
     def initialize(self):
+        self.counter = 0
         self.classes = self.classes if self.classes is not None else len(self.traindata['cls'].unique())
         self.data_dim = len(self.traindata.columns) - 1
         layer_sizes = [self.data_dim]
@@ -92,7 +93,7 @@ class Perceptron:
             if self.bias:
                 self.biases.append(np.zeros(size))
 
-    def train(self):
+    def train(self, render_step=None):
         self.initialize()
         samples = self.traindata.iloc[:, 0:-1].values
         classes = self.traindata.iloc[:, -1].values
@@ -130,7 +131,8 @@ class Perceptron:
                     gradients = [np.add(gradients[idx] * self.momentum, new_gradients[idx] * (1 - self.momentum)) for
                                  idx in range(len(new_gradients))]
 
-                self.apply_gradient(gradients)
+                should_render = self.initialize_plot(render_step, epoch+1, int(batch_start / self.batch_size + 1))
+                self.apply_gradient(gradients, should_render)
 
                 batch_start = batch_end
         return losses
@@ -175,13 +177,54 @@ class Perceptron:
         gradients = gradients[::-1]
         return gradients, loss
 
-    def apply_gradient(self, gradients):
+    def initialize_plot(self, render_step, epoch, batch):
+        if not render_step:
+            return False
+        should_render = self.counter==0
+        if should_render:
+            self.fig = plt.figure()
+            self.fig.suptitle(f"Epoch: {epoch}  Batch: {batch}")
+            ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, 1)
+            ax.axis('off')
+            ax.text(0.5, 0.5, "Weights")
+            ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, len(self.layers) + 2)
+            ax.axis('off')
+            ax.text(0.5, 0.5, "Gradients")
+            if self.bias:
+                ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, 2 * len(self.layers) + 3)
+                ax.axis('off')
+                ax.text(0.5, 0.5, "Bias")
+                ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, 3 * len(self.layers) + 4)
+                ax.axis('off')
+                ax.text(0.5, 0.5, "Gradient")
+        self.counter = (self.counter+1)%render_step
+        return should_render
+
+
+    def apply_gradient(self, gradients, interactive):
         for i in range(len(self.layers)):
             if self.bias:
                 self.layers[i] = np.subtract(self.layers[i], self.learning_rate * gradients[i][:, :-1])
                 self.biases[i] = np.subtract(self.biases[i], self.learning_rate * gradients[i][:, -1])
             else:
                 self.layers[i] = np.subtract(self.layers[i], self.learning_rate * gradients[i])
+            if interactive:
+                ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers)+1, i + 2)
+                plt.colorbar(ax.matshow(self.layers[i], cmap=plt.cm.Blues))
+                ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers)+1, len(self.layers) + i + 3)
+                if self.bias:
+                    plt.colorbar(ax.matshow(gradients[i][:, :-1], cmap=plt.cm.Blues))
+                    ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, 2*len(self.layers) + i + 4)
+                    plt.colorbar(ax.matshow(self.biases[i].reshape(len(self.biases[i]),1), cmap=plt.cm.Blues))
+                    ax.get_xaxis().set_visible(False)
+                    ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, 3*len(self.layers) + i + 5)
+                    plt.colorbar(ax.matshow(gradients[i][:, -1].reshape(len(gradients[i][:, -1]),1), cmap=plt.cm.Blues))
+                    ax.get_xaxis().set_visible(False)
+                else:
+                    plt.colorbar(ax.matshow(gradients[i], cmap=plt.cm.Blues))
+        if interactive:
+            plt.show()
+            input()
 
     def test_classification(self, path):
         testdata = pd.read_csv(path)
@@ -355,9 +398,9 @@ if __name__ == "__main__":
                          learning_rate=0.05,
                          momentum=0.1,
                          epochs=1,
-                         bias=True)
+                         bias=False)
         mlp.load("data\data.three_gauss.train.10000.csv")
-        losses = mlp.train()
+        losses = mlp.train(5)
         st = f'{ind} hidden layers' if ind != 1 else f'{ind} hidden layer'
         print(f'{st}, last mean error: {losses[-1]}')
         plot_errors_title(losses, st)
