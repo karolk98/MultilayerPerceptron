@@ -2,7 +2,9 @@
 from enum import Enum
 import pandas as pd
 import numpy as np
+import scipy as sp
 from sklearn.utils import shuffle
+from sklearn.metrics import log_loss as CE
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -56,7 +58,7 @@ class Perceptron:
 
     def __init__(self, problem_type=ProblemType.Classification, classes=None, hidden_layers=[2, 2],
                  activation=sigmoid, dActivation=dSigmoid, loss=quad, dLoss=dQuad, final=sigmoid, dFinal=dSigmoid,
-                 bias=False,
+                 SM_CE=False, bias=False,
                  batch_size=1000, epochs=10, learning_rate=0.001, momentum=0.1):
         self.problem_type = problem_type
         self.classes = classes if problem_type == self.ProblemType.Classification else 1
@@ -67,6 +69,9 @@ class Perceptron:
         self.dLoss = dLoss
         self.final = final if problem_type == self.ProblemType.Classification else Identity
         self.dFinal = dFinal if problem_type == self.ProblemType.Classification else dIdentity
+        if SM_CE:
+            self.final = sp.special.softmax
+        self.SM_CE = SM_CE
         self.bias = bias
         self.batch_size = batch_size
         self.epochs = epochs
@@ -155,10 +160,9 @@ class Perceptron:
         return y, activated, result
 
     def gradient(self, ys, activated, desired):
-        loss = self.loss(activated[-1], desired)
-        dLoss = self.dLoss(activated[-1], desired)
+        loss = CE(desired, activated[-1]) if self.SM_CE else self.loss(activated[-1], desired)
         gradients = []
-        ygradient = np.multiply(dLoss, self.dFinal(ys[-1]))
+        ygradient = activated[-1]-desired if self.SM_CE else np.multiply(self.dLoss(activated[-1], desired), self.dFinal(ys[-1]))
         if self.bias:
             gradient = np.outer(ygradient, np.append(activated[-2], 1))
         else:
@@ -259,7 +263,7 @@ def draw_classification(network, path):
             res[j, i] = np.argmax(ans, axis=0)
     plt.pcolor(xm, ym, res,
                cmap=matplotlib.colors.ListedColormap(colors),
-               alpha=0.4, shading='auto', snap=True)
+               alpha=0.4, snap=True)
 
     plt.scatter(x, y,
                 c=classes,
