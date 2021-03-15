@@ -5,14 +5,15 @@ import numpy as np
 from sklearn.utils import shuffle
 
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import matplotlib
 
 
-def Mirror(x):
+def Identity(x):
     return x
 
 
-def dMirror(x):
+def dIdentity(x):
     return 1
 
 
@@ -37,7 +38,7 @@ def dSigmoid(z):
 
 
 def dTanh(z):
-    return 1 / (np.tanh(z) ** 2)
+    return 1 - (np.tanh(z) ** 2)
 
 
 def quad(y1, y2):
@@ -45,7 +46,7 @@ def quad(y1, y2):
 
 
 def dQuad(y1, y2):
-    return 2*(y1 - y2)
+    return 2 * (y1 - y2)
 
 
 class Perceptron:
@@ -64,8 +65,8 @@ class Perceptron:
         self.dActivation = dActivation
         self.loss = loss
         self.dLoss = dLoss
-        self.final = final
-        self.dFinal = dFinal
+        self.final = final if problem_type == self.ProblemType.Classification else Identity
+        self.dFinal = dFinal if problem_type == self.ProblemType.Classification else dIdentity
         self.bias = bias
         self.batch_size = batch_size
         self.epochs = epochs
@@ -96,6 +97,7 @@ class Perceptron:
         samples = self.traindata.iloc[:, 0:-1].values
         classes = self.traindata.iloc[:, -1].values
         gradients = []
+        losses = []
         for epoch in range(0, self.epochs):
             batch_start = 0
             while batch_start < len(samples):
@@ -113,7 +115,8 @@ class Perceptron:
                     else:
                         desired_out[0] = classes[m]
 
-                    mth_gradients = self.gradient(y, activated, desired_out)
+                    mth_gradients, loss = self.gradient(y, activated, desired_out)
+                    losses.append(loss)
                     if m == batch_start:
                         new_gradients = mth_gradients
                     else:
@@ -130,6 +133,7 @@ class Perceptron:
                 self.apply_gradient(gradients)
 
                 batch_start = batch_end
+        return losses
 
     def forward(self, batch):
         y = [batch]
@@ -149,6 +153,7 @@ class Perceptron:
         return y, activated, result
 
     def gradient(self, ys, activated, desired):
+        loss = self.loss(activated[-1], desired)
         dLoss = self.dLoss(activated[-1], desired)
         gradients = []
         ygradient = np.multiply(dLoss, self.dFinal(ys[-1]))
@@ -168,7 +173,7 @@ class Perceptron:
             gradients.append(gradient)
 
         gradients = gradients[::-1]
-        return gradients
+        return gradients, loss
 
     def apply_gradient(self, gradients):
         for i in range(len(self.layers)):
@@ -178,7 +183,7 @@ class Perceptron:
             else:
                 self.layers[i] = np.subtract(self.layers[i], self.learning_rate * gradients[i])
 
-    def test(self, path):
+    def test_classification(self, path):
         testdata = pd.read_csv(path)
         samples = testdata.iloc[:, 0:-1].values
         classes = testdata.iloc[:, -1].values
@@ -191,56 +196,168 @@ class Perceptron:
             if predicted == desired_out:
                 counter += 1
 
-        print(counter / len(samples))
-
-    def test_regression(self, path):
-        testdata = pd.read_csv(path)
-        args = testdata.iloc[:, 0:-1].values
-        values = testdata.iloc[:, -1].values
-        predicted_values = []
-        for i, sample in enumerate(args):
-            y, act, result = self.forward(sample)
-            predicted_values.append(result)
-
-        plt.scatter(args, predicted_values)
-        plt.show()
+        print(f'Success ratio: {counter / len(samples)}')
 
 
-def draw_classes(network, path):
+def draw_classification(network, path):
     samples = pd.read_csv(path)
     samples = shuffle(samples)
     x = samples.iloc[:, 0]
     y = samples.iloc[:, 1]
     classes = samples.iloc[:, 2]
     colors = ['red', 'blue', 'green']
-    xlin = np.linspace(-2, 2, 100)
-    ylin = np.linspace(-2, 2, 100)
+    xlin = np.linspace(x.min() - 0.1, x.max() + 0.1, 200)
+    ylin = np.linspace(y.min() - 0.1, y.max() + 0.1, 200)
     xm, ym = np.meshgrid(xlin, ylin)
     res = np.zeros((xlin.shape[0], ylin.shape[0]), dtype=int)
     for i, xi in enumerate(xlin[:-1]):
         for j, yj in enumerate(ylin[:-1]):
             _, _, ans = network.forward([xi, yj])
             res[j, i] = np.argmax(ans, axis=0)
-    plt.pcolormesh(xm, ym, res,
-                   cmap=matplotlib.colors.ListedColormap(colors),
-                   alpha=0.2)
-    plt.scatter(x, y, c=classes, cmap=matplotlib.colors.ListedColormap(colors))
+    plt.pcolor(xm, ym, res,
+               cmap=matplotlib.colors.ListedColormap(colors),
+               alpha=0.4, shading='auto', snap=True)
+
+    plt.scatter(x, y,
+                c=classes,
+                s=0.2,
+                cmap=matplotlib.colors.ListedColormap(colors))
     plt.show()
+
+
+def draw_regression2d(network, x, func):
+    args = x
+    values = [func(a) for a in args]
+    predicted_values = []
+    for i, sample in enumerate(args):
+        _, _, result = network.forward([sample])
+        predicted_values.append(result)
+
+    plt.scatter(args, values, label="expectation")
+    plt.scatter(args, predicted_values, label="prediction")
+    plt.legend(loc="best")
+    plt.show()
+
+
+def draw_regression3d(network, x, y, func):
+    xm, ym = np.meshgrid(x, y)
+    res = np.zeros((x.shape[0], y.shape[0]), dtype=float)
+    predicted_values = np.zeros((x.shape[0], y.shape[0]), dtype=float)
+    for i, xi in enumerate(x):
+        for j, yj in enumerate(y):
+            res[j, i] = func(xi, yj)
+            _, _, pred = network.forward([xi, yj])
+            predicted_values[j, i] = pred
+
+    fig = plt.figure()
+    ax = plt.axes(projection='3d')
+    ax.view_init(25, 80)
+    s1 = ax.plot_surface(xm, ym, res,
+                         label="expectation",
+                         color='red',
+                         edgecolor='none')
+
+    s2 = ax.plot_surface(xm, ym, predicted_values,
+                         label="prediction",
+                         color='blue',
+                         edgecolor='none')
+    red_patch = mpatches.Patch(color='red', label='expectation')
+    blue_patch = mpatches.Patch(color='blue', label="prediction")
+    plt.legend(handles=[red_patch, blue_patch])
+    plt.show()
+
+
+def plot_errors(losses):
+    plt.plot(range(len(losses)), losses, label="one pass")
+    mean_losses = []
+    for i in range(0, len(losses), 100):
+        vv = min(len(losses), i + 100)
+        mean_losses.append(sum(losses[i:vv]) / 100)
+    xes = range(len(mean_losses))
+    xes = [v * 100 for v in xes]
+    plt.plot(xes, mean_losses, label="mean of 100 passes")
+    plt.xlabel("pass")
+    plt.ylabel("error")
+    plt.title("error change")
+    plt.legend()
+    plt.show()
+
+    print(f'Last mean error: {mean_losses[-1]}')
+
+
+def plot_errors_title(losses, title):
+    plt.plot(range(len(losses)), losses, label="one pass")
+    mean_losses = []
+    for i in range(0, len(losses), 100):
+        vv = min(len(losses), i + 100)
+        mean_losses.append(sum(losses[i:vv]) / 100)
+    xes = range(len(mean_losses))
+    xes = [v * 100 for v in xes]
+    plt.plot(xes, mean_losses, label="mean of 100 passes")
+    plt.xlabel("pass")
+    plt.ylabel("error")
+    plt.title(title)
+    plt.legend()
+    plt.show()
+
 
 if __name__ == "__main__":
     np.random.seed(1)
-    mlp = Perceptron(problem_type=Perceptron.ProblemType.Classification,
-                     hidden_layers=[4],
-                     activation=sigmoid,
-                     dActivation=dSigmoid,
-                     final=sigmoid,
-                     dFinal=dSigmoid,
-                     batch_size=3,
-                     learning_rate=0.5,
-                     momentum=0.1,
-                     epochs=4,
-                     bias=True)
-    mlp.load("data\data.three_gauss.train.10000.csv")
-    mlp.train()
-    mlp.test("data\data.three_gauss.test.10000.csv")
-    draw_classes(mlp, "data\data.three_gauss.test.10000.csv")
+    #
+    # mlp = Perceptron(problem_type=Perceptron.ProblemType.Regression,
+    #                  hidden_layers=[10],
+    #                  activation=sigmoid,
+    #                  dActivation=dSigmoid,
+    #                  batch_size=3,
+    #                  learning_rate=0.001,
+    #                  momentum=0.1,
+    #                  epochs=1,
+    #                  bias=True)
+    #
+    # mlp.load("data\quadratic2_train.csv")
+    # losses = mlp.train()
+    # draw_regression2d(mlp, x=np.linspace(-5, 5, 100), func=lambda x: x ** 2-3*x-5)
+    # #plot_errors(losses)
+
+    # mlp = Perceptron(problem_type=Perceptron.ProblemType.Regression,
+    #                  hidden_layers=[12],
+    #                  activation=sigmoid,
+    #                  dActivation=dSigmoid,
+    #                  batch_size=3,
+    #                  learning_rate=0.01,
+    #                  momentum=0.1,
+    #                  epochs=10,
+    #                  bias=True)
+    #
+    # mlp.load("data\\3d_train.csv")
+    # losses = mlp.train()
+    # draw_regression3d(mlp,
+    #                   x=np.linspace(-5, 5, 50),
+    #                   y=np.linspace(-5, 5, 50),
+    #                   func=lambda x, y:  x**2+x*y+5*x-1)
+    #
+    # np.random.seed(1)
+
+    layers = [[],
+              [3],
+              [3, 3],
+              [3, 3, 3],
+              [3, 3, 3, 3],
+              [3, 3, 3, 3, 3]]
+    for ind, layer_type in enumerate(layers):
+        mlp = Perceptron(problem_type=Perceptron.ProblemType.Classification,
+                         hidden_layers=layer_type,
+                         activation=sigmoid,
+                         dActivation=dSigmoid,
+                         final=sigmoid,
+                         dFinal=dSigmoid,
+                         batch_size=3,
+                         learning_rate=0.05,
+                         momentum=0.1,
+                         epochs=1,
+                         bias=True)
+        mlp.load("data\data.three_gauss.train.10000.csv")
+        losses = mlp.train()
+        st = f'{ind} hidden layers' if ind != 1 else f'{ind} hidden layer'
+        print(f'{st}, last mean error: {losses[-1]}')
+        plot_errors_title(losses, st)
