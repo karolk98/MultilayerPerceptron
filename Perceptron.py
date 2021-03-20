@@ -9,6 +9,7 @@ from sklearn.metrics import log_loss as CE
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib
+import MnistReader
 
 
 def Identity(x):
@@ -44,7 +45,7 @@ def dTanh(z):
 
 
 def MSE(y1, y2):
-    return np.sum((y1 - y2) ** 2)/len(y1)
+    return np.sum((y1 - y2) ** 2) / len(y1)
 
 
 def dMSE(y1, y2):
@@ -52,7 +53,7 @@ def dMSE(y1, y2):
 
 
 def MAE(y1, y2):
-    return np.sum(np.abs(y1-y2))/len(y1)
+    return np.sum(np.abs(y1 - y2)) / len(y1)
 
 
 def dMAE(y1, y2):
@@ -89,13 +90,13 @@ class Perceptron:
         self.learning_rate = learning_rate
         self.momentum = momentum
 
-    def load(self, path):
-        self.traindata = pd.read_csv(path)
-        self.traindata = shuffle(self.traindata)
+    def load(self, data):
+        self.traindata = data
 
     def initialize(self):
         self.counter = 0
-        self.classes = self.classes if self.classes is not None else len(self.traindata['cls'].unique())
+        self.classes = self.classes if self.classes is not None else len(
+            self.traindata[self.traindata.columns[-1]].unique())
         self.data_dim = len(self.traindata.columns) - 1
         layer_sizes = [self.data_dim]
         layer_sizes.extend(self.hidden_layers)
@@ -116,8 +117,10 @@ class Perceptron:
         gradients = []
         losses = []
         for epoch in range(0, self.epochs):
+            print(f"epoch {epoch}")
             batch_start = 0
             while batch_start < len(samples):
+                print(f"samples {batch_start}/{len(samples)}")
                 batch_end = min(batch_start + self.batch_size, len(samples))
 
                 batch_size = batch_end - batch_start
@@ -147,7 +150,7 @@ class Perceptron:
                     gradients = [np.add(gradients[idx] * self.momentum, new_gradients[idx] * (1 - self.momentum)) for
                                  idx in range(len(new_gradients))]
 
-                should_render = self.initialize_plot(render_step, epoch+1, int(batch_start / self.batch_size + 1))
+                should_render = self.initialize_plot(render_step, epoch + 1, int(batch_start / self.batch_size + 1))
                 self.apply_gradient(gradients, should_render)
 
                 batch_start = batch_end
@@ -173,7 +176,8 @@ class Perceptron:
     def gradient(self, ys, activated, desired):
         loss = CE(desired, activated[-1]) if self.SM_CE else self.loss(activated[-1], desired)
         gradients = []
-        ygradient = activated[-1]-desired if self.SM_CE else np.multiply(self.dLoss(activated[-1], desired), self.dFinal(ys[-1]))
+        ygradient = activated[-1] - desired if self.SM_CE else np.multiply(self.dLoss(activated[-1], desired),
+                                                                           self.dFinal(ys[-1]))
         if self.bias:
             gradient = np.outer(ygradient, np.append(activated[-2], 1))
         else:
@@ -195,7 +199,7 @@ class Perceptron:
     def initialize_plot(self, render_step, epoch, batch):
         if not render_step:
             return False
-        should_render = self.counter==0
+        should_render = self.counter == 0
         if should_render:
             self.fig = plt.figure()
             self.fig.suptitle(f"Epoch: {epoch}  Batch: {batch}")
@@ -212,9 +216,8 @@ class Perceptron:
                 ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, 3 * len(self.layers) + 4)
                 ax.axis('off')
                 ax.text(0.5, 0.5, "Gradient")
-        self.counter = (self.counter+1)%render_step
+        self.counter = (self.counter + 1) % render_step
         return should_render
-
 
     def apply_gradient(self, gradients, interactive):
         for i in range(len(self.layers)):
@@ -224,16 +227,17 @@ class Perceptron:
             else:
                 self.layers[i] = np.subtract(self.layers[i], self.learning_rate * gradients[i])
             if interactive:
-                ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers)+1, i + 2)
+                ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, i + 2)
                 plt.colorbar(ax.matshow(self.layers[i], cmap=plt.cm.Blues))
-                ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers)+1, len(self.layers) + i + 3)
+                ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, len(self.layers) + i + 3)
                 if self.bias:
                     plt.colorbar(ax.matshow(gradients[i][:, :-1], cmap=plt.cm.Blues))
-                    ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, 2*len(self.layers) + i + 4)
-                    plt.colorbar(ax.matshow(self.biases[i].reshape(len(self.biases[i]),1), cmap=plt.cm.Blues))
+                    ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, 2 * len(self.layers) + i + 4)
+                    plt.colorbar(ax.matshow(self.biases[i].reshape(len(self.biases[i]), 1), cmap=plt.cm.Blues))
                     ax.get_xaxis().set_visible(False)
-                    ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, 3*len(self.layers) + i + 5)
-                    plt.colorbar(ax.matshow(gradients[i][:, -1].reshape(len(gradients[i][:, -1]),1), cmap=plt.cm.Blues))
+                    ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, 3 * len(self.layers) + i + 5)
+                    plt.colorbar(
+                        ax.matshow(gradients[i][:, -1].reshape(len(gradients[i][:, -1]), 1), cmap=plt.cm.Blues))
                     ax.get_xaxis().set_visible(False)
                 else:
                     plt.colorbar(ax.matshow(gradients[i], cmap=plt.cm.Blues))
@@ -241,8 +245,7 @@ class Perceptron:
             plt.show()
             input()
 
-    def test_classification(self, path):
-        testdata = pd.read_csv(path)
+    def test_classification(self, testdata):
         samples = testdata.iloc[:, 0:-1].values
         classes = testdata.iloc[:, -1].values
         counter = 0
@@ -362,61 +365,23 @@ def plot_errors_title(losses, title):
 
 if __name__ == "__main__":
     np.random.seed(1)
-    #
-    # mlp = Perceptron(problem_type=Perceptron.ProblemType.Regression,
-    #                  hidden_layers=[10],
-    #                  activation=sigmoid,
-    #                  dActivation=dSigmoid,
-    #                  batch_size=3,
-    #                  learning_rate=0.001,
-    #                  momentum=0.1,
-    #                  epochs=1,
-    #                  bias=True)
-    #
-    # mlp.load("data\quadratic2_train.csv")
-    # losses = mlp.train()
-    # draw_regression2d(mlp, x=np.linspace(-5, 5, 100), func=lambda x: x ** 2-3*x-5)
-    # #plot_errors(losses)
 
-    # mlp = Perceptron(problem_type=Perceptron.ProblemType.Regression,
-    #                  hidden_layers=[12],
-    #                  activation=sigmoid,
-    #                  dActivation=dSigmoid,
-    #                  batch_size=3,
-    #                  learning_rate=0.01,
-    #                  momentum=0.1,
-    #                  epochs=10,
-    #                  bias=True)
-    #
-    # mlp.load("data\\3d_train.csv")
-    # losses = mlp.train()
-    # draw_regression3d(mlp,
-    #                   x=np.linspace(-5, 5, 50),
-    #                   y=np.linspace(-5, 5, 50),
-    #                   func=lambda x, y:  x**2+x*y+5*x-1)
-    #
-    # np.random.seed(1)
+    mlp = Perceptron(problem_type=Perceptron.ProblemType.Classification,
+                     hidden_layers=[300],
+                     activation=ReLU,
+                     dActivation=dReLU,
+                     SM_CE=True,
+                     batch_size=3,
+                     learning_rate=0.05,
+                     momentum=0.9,
+                     epochs=1,
+                     bias=True)
+    mlp.load(
+        MnistReader.load_data("data\\MNIST\\raw\\train-images-idx3-ubyte",
+                              "data\\MNIST\\raw\\train-labels-idx1-ubyte"))
+    losses = mlp.train()
+    mlp.test_classification(
+        MnistReader.load_data("data\\MNIST\\raw\\t10k-images-idx3-ubyte",
+                              "data\\MNIST\\raw\\t10k-labels-idx1-ubyte"))
 
-    layers = [[],
-              [3],
-              [3, 3],
-              [3, 3, 3],
-              [3, 3, 3, 3],
-              [3, 3, 3, 3, 3]]
-    for ind, layer_type in enumerate(layers):
-        mlp = Perceptron(problem_type=Perceptron.ProblemType.Classification,
-                         hidden_layers=layer_type,
-                         activation=sigmoid,
-                         dActivation=dSigmoid,
-                         final=sigmoid,
-                         dFinal=dSigmoid,
-                         batch_size=3,
-                         learning_rate=0.05,
-                         momentum=0.1,
-                         epochs=1,
-                         bias=False)
-        mlp.load("data\data.three_gauss.train.10000.csv")
-        losses = mlp.train(5)
-        st = f'{ind} hidden layers' if ind != 1 else f'{ind} hidden layer'
-        print(f'{st}, last mean error: {losses[-1]}')
-        plot_errors_title(losses, st)
+    plot_errors(losses)
