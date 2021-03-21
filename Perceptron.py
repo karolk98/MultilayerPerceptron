@@ -9,6 +9,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from matplotlib.ticker import MaxNLocator
 import matplotlib
 import MnistReader
 
@@ -90,9 +91,14 @@ class Perceptron:
         self.epochs = epochs
         self.learning_rate = learning_rate
         self.momentum = momentum
+        self.testdata = None
+        self.traindata = None
 
     def load(self, data):
         self.traindata = data
+
+    def load_testdata(self, data):
+        self.testdata = data
 
     def initialize(self):
         self.counter = 0
@@ -129,6 +135,8 @@ class Perceptron:
         classes = self.traindata.iloc[:, -1].values
         gradients = []
         losses = []
+        err_train = []
+        err_test = []
         for epoch in range(0, self.epochs):
             print(f"epoch {epoch}")
             batch_start = 0
@@ -147,8 +155,8 @@ class Perceptron:
                 pool.join()
 
                 for m in range(batch_start, batch_end):
-                    mth_gradients = results[m-batch_start][0]
-                    losses.append(results[m-batch_start][1])
+                    mth_gradients = results[m - batch_start][0]
+                    losses.append(results[m - batch_start][1])
                     if m == batch_start:
                         new_gradients = mth_gradients
                     else:
@@ -166,7 +174,14 @@ class Perceptron:
                 self.apply_gradient(gradients, should_render)
 
                 batch_start = batch_end
-        return losses
+
+            if self.problem_type == self.ProblemType.Classification and self.testdata is not None:
+                etr = self.test_classification(self.traindata)
+                err_train.append(etr)
+                ete = self.test_classification(self.testdata)
+                err_test.append(ete)
+
+        return losses, err_train, err_test
 
     def forward(self, batch):
         y = [batch]
@@ -269,7 +284,7 @@ class Perceptron:
             if predicted == desired_out:
                 counter += 1
 
-        print(f'Success ratio: {counter / len(samples)}')
+        return counter / len(samples)
 
 
 def draw_classification(network, path):
@@ -341,25 +356,7 @@ def draw_regression3d(network, x, y, func):
     plt.show()
 
 
-def plot_errors(losses):
-    plt.plot(range(len(losses)), losses, label="one pass")
-    mean_losses = []
-    for i in range(0, len(losses), 100):
-        vv = min(len(losses), i + 100)
-        mean_losses.append(sum(losses[i:vv]) / 100)
-    xes = range(len(mean_losses))
-    xes = [v * 100 for v in xes]
-    plt.plot(xes, mean_losses, label="mean of 100 passes")
-    plt.xlabel("pass")
-    plt.ylabel("error")
-    plt.title("error change")
-    plt.legend()
-    plt.show()
-
-    print(f'Last mean error: {mean_losses[-1]}')
-
-
-def plot_errors_title(losses, title):
+def plot_errors(losses, title="Error depending on a pass number"):
     plt.plot(range(len(losses)), losses, label="one pass")
     mean_losses = []
     for i in range(0, len(losses), 100):
@@ -374,10 +371,24 @@ def plot_errors_title(losses, title):
     plt.legend()
     plt.show()
 
+    print(f'Last mean error: {mean_losses[-1]}')
+
+
+def plot_accuracy(epochs, train_accuracy, test_accuracy):
+    fig, ax = plt.subplots()
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.plot(range(1,epochs+1), train_accuracy, label="train data")
+    ax.plot(range(1,epochs+1), test_accuracy, label="test data")
+    ax.set_xlabel("epoch")
+    ax.set_xlabel("accuracy")
+    ax.set_title("Accuracy on test and train data")
+    ax.legend()
+    plt.show()
 
 if __name__ == "__main__":
     np.random.seed(1)
 
+    epochs = 2
     mlp = Perceptron(problem_type=Perceptron.ProblemType.Classification,
                      hidden_layers=[300],
                      activation=ReLU,
@@ -385,15 +396,20 @@ if __name__ == "__main__":
                      SM_CE=True,
                      batch_size=128,
                      learning_rate=0.1,
-                     momentum=0.9,
-                     epochs=1,
+                     momentum=0.1,
+                     epochs=epochs,
                      bias=True)
     mlp.load(
         MnistReader.load_data("data\\MNIST\\raw\\train-images-idx3-ubyte",
                               "data\\MNIST\\raw\\train-labels-idx1-ubyte"))
-    losses = mlp.train()
-    mlp.test_classification(
+    mlp.load_testdata(
         MnistReader.load_data("data\\MNIST\\raw\\t10k-images-idx3-ubyte",
                               "data\\MNIST\\raw\\t10k-labels-idx1-ubyte"))
+    losses, train_accuracy, test_accuracy = mlp.train()
+
+    print(f'train accuracy: {train_accuracy}')
+    print(f'test accuracy: {test_accuracy}')
+
+    plot_accuracy(epochs, train_accuracy, test_accuracy)
 
     plot_errors(losses)
