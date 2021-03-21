@@ -5,6 +5,7 @@ import numpy as np
 import scipy as sp
 from sklearn.utils import shuffle
 from sklearn.metrics import log_loss as CE
+from multiprocessing.dummy import Pool as ThreadPool
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -110,6 +111,18 @@ class Perceptron:
             if self.bias:
                 self.biases.append(np.zeros(size))
 
+    def sample_train(self, sample, label):
+        y, activated, _ = self.forward(sample)
+        desired_out = np.zeros(self.classes)
+
+        if self.problem_type == self.ProblemType.Classification:
+            desired_out[label - 1] = 1
+        else:
+            desired_out[0] = label
+
+        mth_gradients, loss = self.gradient(y, activated, desired_out)
+        return mth_gradients, loss
+
     def train(self, render_step=None):
         self.initialize()
         samples = self.traindata.iloc[:, 0:-1].values
@@ -126,17 +139,16 @@ class Perceptron:
                 batch_size = batch_end - batch_start
                 new_gradients = []
 
+                pool = ThreadPool()
+                results = pool.starmap(self.sample_train, zip(
+                    samples[batch_start:batch_end],
+                    classes[batch_start:batch_end]))
+                pool.close()
+                pool.join()
+
                 for m in range(batch_start, batch_end):
-                    y, activated, _ = self.forward(samples[m])
-                    desired_out = np.zeros(self.classes)
-
-                    if self.problem_type == self.ProblemType.Classification:
-                        desired_out[classes[m] - 1] = 1
-                    else:
-                        desired_out[0] = classes[m]
-
-                    mth_gradients, loss = self.gradient(y, activated, desired_out)
-                    losses.append(loss)
+                    mth_gradients = results[m-batch_start][0]
+                    losses.append(results[m-batch_start][1])
                     if m == batch_start:
                         new_gradients = mth_gradients
                     else:
@@ -371,8 +383,8 @@ if __name__ == "__main__":
                      activation=ReLU,
                      dActivation=dReLU,
                      SM_CE=True,
-                     batch_size=3,
-                     learning_rate=0.05,
+                     batch_size=128,
+                     learning_rate=0.1,
                      momentum=0.9,
                      epochs=1,
                      bias=True)
