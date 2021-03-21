@@ -12,6 +12,8 @@ import matplotlib.patches as mpatches
 from matplotlib.ticker import MaxNLocator
 import matplotlib
 import MnistReader
+import time
+import os
 
 
 def Identity(x):
@@ -377,39 +379,87 @@ def plot_errors(losses, title="Error depending on a pass number"):
 def plot_accuracy(epochs, train_accuracy, test_accuracy):
     fig, ax = plt.subplots()
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.plot(range(1,epochs+1), train_accuracy, label="train data")
-    ax.plot(range(1,epochs+1), test_accuracy, label="test data")
+    ax.plot(range(1, epochs + 1), train_accuracy, label="train data")
+    ax.plot(range(1, epochs + 1), test_accuracy, label="test data")
     ax.set_xlabel("epoch")
     ax.set_xlabel("accuracy")
     ax.set_title("Accuracy on test and train data")
     ax.legend()
     plt.show()
 
+
+def run_tests(tests, testdata, traindata):
+    for test in tests:
+        path = time.strftime("%Y-%m-%d_%H-%M-%S")
+        try:
+            os.mkdir(path)
+        except OSError:
+            print("Creation of the directory %s failed" % path)
+        else:
+            print("Successfully created the directory %s " % path)
+        with open(os.path.join(path, 'description.txt'), 'w') as f:
+            print(test, file=f)
+
+        mlp = Perceptron(problem_type=test["problem_type"],
+                         hidden_layers=test["hidden_layers"],
+                         activation=test["activation"],
+                         dActivation=test["dActivation"],
+                         SM_CE=test["SM_CE"],
+                         batch_size=test["batch_size"],
+                         learning_rate=test["learning_rate"],
+                         momentum=test["momentum"],
+                         epochs=test["epochs"],
+                         bias=test["bias"])
+        mlp.load(traindata)
+        mlp.load_testdata(testdata)
+        losses, train_accuracy, test_accuracy = mlp.train()
+
+        np.savetxt(os.path.join(path, "losses.csv"), np.asarray(losses), delimiter=",")
+        np.savetxt(os.path.join(path, "train_accuracy.csv"), np.asarray(train_accuracy), delimiter=",")
+        np.savetxt(os.path.join(path, "test_accuracy.csv"), np.asarray(test_accuracy), delimiter=",")
+
+        print(f'train accuracy: {train_accuracy}')
+        print(f'test accuracy: {test_accuracy}')
+
+        # plot_accuracy(test["epochs"], train_accuracy, test_accuracy)
+
+        # plot_errors(losses)
+
+
 if __name__ == "__main__":
     np.random.seed(1)
 
-    epochs = 2
-    mlp = Perceptron(problem_type=Perceptron.ProblemType.Classification,
-                     hidden_layers=[300],
-                     activation=ReLU,
-                     dActivation=dReLU,
-                     SM_CE=True,
-                     batch_size=128,
-                     learning_rate=0.1,
-                     momentum=0.1,
-                     epochs=epochs,
-                     bias=True)
-    mlp.load(
-        MnistReader.load_data("data\\MNIST\\raw\\train-images-idx3-ubyte",
-                              "data\\MNIST\\raw\\train-labels-idx1-ubyte"))
-    mlp.load_testdata(
-        MnistReader.load_data("data\\MNIST\\raw\\t10k-images-idx3-ubyte",
-                              "data\\MNIST\\raw\\t10k-labels-idx1-ubyte"))
-    losses, train_accuracy, test_accuracy = mlp.train()
+    tests = [
+        {"problem_type": Perceptron.ProblemType.Classification,
+         "hidden_layers": [128, 16],
+         "activation": ReLU,
+         "dActivation": dReLU,
+         "SM_CE": True,
+         "batch_size": 100,
+         "learning_rate": 0.1,
+         "momentum": 0.1,
+         "epochs": 1,
+         "bias": True
+         },
+        {"problem_type": Perceptron.ProblemType.Classification,
+         "hidden_layers": [300],
+         "activation": ReLU,
+         "dActivation": dReLU,
+         "final": None,
+         "dFinal": None,
+         "loss": None,
+         "dLoss": None,
+         "SM_CE": True,
+         "batch_size": 3000,
+         "learning_rate": 0.1,
+         "momentum": 0.1,
+         "epochs": 2,
+         "bias": True
+         }
+    ]
 
-    print(f'train accuracy: {train_accuracy}')
-    print(f'test accuracy: {test_accuracy}')
-
-    plot_accuracy(epochs, train_accuracy, test_accuracy)
-
-    plot_errors(losses)
+    run_tests(tests,
+              traindata=MnistReader.load_data("data\\MNIST\\raw\\train-images-idx3-ubyte",
+                                              "data\\MNIST\\raw\\train-labels-idx1-ubyte"),
+              testdata=MnistReader.load_data("data\\MNIST\\raw\\t10k-images-idx3-ubyte",
+                                             "data\\MNIST\\raw\\t10k-labels-idx1-ubyte"))
