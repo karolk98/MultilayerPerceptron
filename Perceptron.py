@@ -121,18 +121,6 @@ class Perceptron:
             if self.bias:
                 self.biases.append(np.zeros(size))
 
-    def sample_train(self, sample, label):
-        y, activated, _ = self.forward(sample)
-        desired_out = np.zeros(self.classes)
-
-        if self.problem_type == self.ProblemType.Classification:
-            desired_out[label - 1] = 1
-        else:
-            desired_out[0] = label
-
-        mth_gradients, loss = self.gradient(y, activated, desired_out)
-        return mth_gradients
-
     def train(self, render_step=None):
         self.initialize()
         samples = self.traindata.iloc[:, 0:-1].values
@@ -198,7 +186,7 @@ class Perceptron:
         return np.array(y, dtype="object"), np.array(activated, dtype="object"), result
 
     def gradient(self, ys, activated, desired):
-        loss = CE(desired, activated[-1]) if self.SM_CE else self.loss(activated[-1], desired)
+        loss = CE(desired, activated[-1]) if self.SM_CE else self.loss(activated[-1], desired)/desired.shape[1]
         gradients = []
         bias_gradients = []
         ygradient = activated[-1] - desired if self.SM_CE else np.multiply(self.dLoss(activated[-1], desired),
@@ -425,7 +413,7 @@ if __name__ == "__main__":
          "batch_size": 100,
          "learning_rate": 0.01,
          "momentum": 0.9,
-         "epochs": 200,
+         "epochs": 20,
          "bias": True
          },
         # {"problem_type": Perceptron.ProblemType.Classification,
