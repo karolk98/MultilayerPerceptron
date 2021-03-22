@@ -152,7 +152,7 @@ class Perceptron:
                 else:
                     gradients = [np.add(gradients[idx] * self.momentum, new_gradients[idx] * (1 - self.momentum)) for
                                  idx in range(len(new_gradients))]
-                    bias_gradients = [np.add(bias_gradients[idx] * self.momentum, new_bias_gradients[idx] * (1 - self.momentum)) for
+                    bias_gradients = [np.add(bias_gradients[idx] * self.momentum, new_bias_gradients[idx]) for
                                  idx in range(len(new_bias_gradients))]
 
                 should_render = self.initialize_plot(render_step, epoch + 1, int(batch_start / self.batch_size + 1))
@@ -411,9 +411,9 @@ if __name__ == "__main__":
          "dActivation": dSigmoid,
          "SM_CE": True,
          "batch_size": 100,
-         "learning_rate": 0.01,
+         "learning_rate": 1e-5,
          "momentum": 0.9,
-         "epochs": 20,
+         "epochs": 1000,
          "bias": True
          },
         # {"problem_type": Perceptron.ProblemType.Classification,
