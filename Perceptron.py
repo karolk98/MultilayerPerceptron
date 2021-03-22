@@ -356,7 +356,7 @@ def plot_accuracy(epochs, train_accuracy, test_accuracy):
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.plot(range(1, epochs + 1), train_accuracy, label="train data")
     ax.plot(range(1, epochs + 1), test_accuracy, label="test data")
-    ax.set_xlabel("epoch")
+    ax.set_ylabel("epoch")
     ax.set_xlabel("accuracy")
     ax.set_title("Accuracy on test and train data")
     ax.legend()
