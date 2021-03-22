@@ -154,7 +154,9 @@ class Perceptron:
                 desired[classes[batch_start:batch_end]-1, np.arange(batch.shape[1])] = 1
                 y, activated, _ = self.forward(batch)
 
-                new_gradients, new_bias_gradients, _ = self.gradient(y, activated, desired)
+                new_gradients, new_bias_gradients, loss = self.gradient(y, activated, desired)
+
+                losses.append(loss)
 
                 if len(gradients) == 0:
                     gradients = new_gradients
@@ -408,7 +410,7 @@ def run_tests(tests, testdata, traindata):
 
         plot_accuracy(test["epochs"], train_accuracy, test_accuracy)
 
-        # plot_errors(losses)
+        plot_errors(losses)
 
 
 if __name__ == "__main__":
@@ -416,14 +418,14 @@ if __name__ == "__main__":
 
     tests = [
         {"problem_type": Perceptron.ProblemType.Classification,
-         "hidden_layers": [300],
+         "hidden_layers": [128, 16],
          "activation": sigmoid,
          "dActivation": dSigmoid,
          "SM_CE": True,
          "batch_size": 100,
-         "learning_rate": 0.03,
-         "momentum": 0.1,
-         "epochs": 20,
+         "learning_rate": 0.01,
+         "momentum": 0.9,
+         "epochs": 200,
          "bias": True
          },
         # {"problem_type": Perceptron.ProblemType.Classification,
