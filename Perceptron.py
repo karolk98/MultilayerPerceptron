@@ -150,7 +150,7 @@ class Perceptron:
                     gradients = new_gradients
                     bias_gradients = new_bias_gradients
                 else:
-                    gradients = [np.add(gradients[idx] * self.momentum, new_gradients[idx] * (1 - self.momentum)) for
+                    gradients = [np.add(gradients[idx] * self.momentum, new_gradients[idx]) for
                                  idx in range(len(new_gradients))]
                     bias_gradients = [np.add(bias_gradients[idx] * self.momentum, new_bias_gradients[idx]) for
                                  idx in range(len(new_bias_gradients))]
@@ -416,21 +416,6 @@ if __name__ == "__main__":
          "epochs": 1000,
          "bias": True
          },
-        # {"problem_type": Perceptron.ProblemType.Classification,
-        #  "hidden_layers": [300],
-        #  "activation": ReLU,
-        #  "dActivation": dReLU,
-        #  "final": None,
-        #  "dFinal": None,
-        #  "loss": None,
-        #  "dLoss": None,
-        #  "SM_CE": True,
-        #  "batch_size": 3000,
-        #  "learning_rate": 0.1,
-        #  "momentum": 0.1,
-        #  "epochs": 2,
-        #  "bias": True
-        #  }
     ]
 
     run_tests(tests,
