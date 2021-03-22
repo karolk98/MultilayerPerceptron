@@ -144,7 +144,7 @@ class Perceptron:
 
                 new_gradients, new_bias_gradients, loss = self.gradient(y, activated, desired)
 
-                losses.append(loss)
+                losses.append(loss/(batch_end-batch_start))
 
                 if len(gradients) == 0:
                     gradients = new_gradients
@@ -186,7 +186,7 @@ class Perceptron:
         return np.array(y, dtype="object"), np.array(activated, dtype="object"), result
 
     def gradient(self, ys, activated, desired):
-        loss = CE(desired, activated[-1]) if self.SM_CE else self.loss(activated[-1], desired)/desired.shape[1]
+        loss = CE(desired, activated[-1]) if self.SM_CE else self.loss(activated[-1], desired)
         gradients = []
         bias_gradients = []
         ygradient = activated[-1] - desired if self.SM_CE else np.multiply(self.dLoss(activated[-1], desired),
