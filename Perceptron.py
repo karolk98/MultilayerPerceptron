@@ -35,6 +35,8 @@ def sigmoid(z):
 def tanh(z):
     return np.tanh(z)
 
+def softmax(z):
+    return sp.special.softmax(z, axis=0)
 
 def dReLU(z):
     return (z > 0) * 1
@@ -86,7 +88,7 @@ class Perceptron:
         self.final = final if problem_type == self.ProblemType.Classification else Identity
         self.dFinal = dFinal if problem_type == self.ProblemType.Classification else dIdentity
         if SM_CE:
-            self.final = sp.special.softmax
+            self.final = softmax
         self.SM_CE = SM_CE
         self.bias = bias
         self.batch_size = batch_size
@@ -129,13 +131,14 @@ class Perceptron:
             desired_out[0] = label
 
         mth_gradients, loss = self.gradient(y, activated, desired_out)
-        return mth_gradients, loss
+        return mth_gradients
 
     def train(self, render_step=None):
         self.initialize()
         samples = self.traindata.iloc[:, 0:-1].values
         classes = self.traindata.iloc[:, -1].values
         gradients = []
+        bias_gradients = []
         losses = []
         err_train = []
         err_test = []
@@ -143,37 +146,27 @@ class Perceptron:
             print(f"epoch {epoch}")
             batch_start = 0
             while batch_start < len(samples):
-                print(f"samples {batch_start}/{len(samples)}")
+                # print(f"samples {batch_start}/{len(samples)}")
                 batch_end = min(batch_start + self.batch_size, len(samples))
 
-                batch_size = batch_end - batch_start
-                new_gradients = []
+                batch = samples[batch_start:batch_end].T
+                desired = np.zeros((self.classes, batch.shape[1]))
+                desired[classes[batch_start:batch_end]-1, np.arange(batch.shape[1])] = 1
+                y, activated, _ = self.forward(batch)
 
-                pool = ThreadPool()
-                results = pool.starmap(self.sample_train, zip(
-                    samples[batch_start:batch_end],
-                    classes[batch_start:batch_end]))
-                pool.close()
-                pool.join()
+                new_gradients, new_bias_gradients, _ = self.gradient(y, activated, desired)
 
-                for m in range(batch_start, batch_end):
-                    mth_gradients = results[m - batch_start][0]
-                    losses.append(results[m - batch_start][1])
-                    if m == batch_start:
-                        new_gradients = mth_gradients
-                    else:
-                        new_gradients = [np.add(new_gradients[idx], mth_gradients[idx]) for idx in
-                                         range(len(new_gradients))]
-
-                new_gradients = [gradient / batch_size for gradient in new_gradients]
                 if len(gradients) == 0:
                     gradients = new_gradients
+                    bias_gradients = new_bias_gradients
                 else:
                     gradients = [np.add(gradients[idx] * self.momentum, new_gradients[idx] * (1 - self.momentum)) for
                                  idx in range(len(new_gradients))]
+                    bias_gradients = [np.add(bias_gradients[idx] * self.momentum, new_bias_gradients[idx] * (1 - self.momentum)) for
+                                 idx in range(len(new_bias_gradients))]
 
                 should_render = self.initialize_plot(render_step, epoch + 1, int(batch_start / self.batch_size + 1))
-                self.apply_gradient(gradients, should_render)
+                self.apply_gradient(gradients, bias_gradients, should_render)
 
                 batch_start = batch_end
 
@@ -192,7 +185,7 @@ class Perceptron:
         for idx, layer in enumerate(self.layers):
             output = np.matmul(layer, output)
             if self.bias:
-                output = output + self.biases[idx]
+                output = output + self.biases[idx][:, None]
             y.append(output)
             if idx == len(self.layers) - 1:
                 output = self.final(output)
@@ -200,30 +193,30 @@ class Perceptron:
                 output = self.activation(output)
             activated.append(output)
             result = activated[-1]
-        return y, activated, result
+        return np.array(y, dtype="object"), np.array(activated, dtype="object"), result
 
     def gradient(self, ys, activated, desired):
         loss = CE(desired, activated[-1]) if self.SM_CE else self.loss(activated[-1], desired)
         gradients = []
+        bias_gradients = []
         ygradient = activated[-1] - desired if self.SM_CE else np.multiply(self.dLoss(activated[-1], desired),
                                                                            self.dFinal(ys[-1]))
         if self.bias:
-            gradient = np.outer(ygradient, np.append(activated[-2], 1))
-        else:
-            gradient = np.outer(ygradient, activated[-2])
+            bias_gradients.append(np.sum(ygradient, axis=1))
+        gradient = np.matmul(ygradient, activated[-2].T)
         gradients.append(gradient)
 
         for i in range(len(self.layers) - 2, -1, -1):
             next_layer = self.layers[i + 1]
             ygradient = np.multiply(np.matmul(next_layer.T, ygradient), self.dActivation(ys[i + 1]))
             if self.bias:
-                gradient = np.outer(ygradient, np.append(activated[i], 1))
-            else:
-                gradient = np.outer(ygradient, activated[i])
+                bias_gradients.append(np.sum(ygradient, axis=1))
+            gradient = np.matmul(ygradient, activated[i].T)
             gradients.append(gradient)
 
+        bias_gradients = bias_gradients[::-1]
         gradients = gradients[::-1]
-        return gradients, loss
+        return gradients, bias_gradients, loss
 
     def initialize_plot(self, render_step, epoch, batch):
         if not render_step:
@@ -248,25 +241,23 @@ class Perceptron:
         self.counter = (self.counter + 1) % render_step
         return should_render
 
-    def apply_gradient(self, gradients, interactive):
+    def apply_gradient(self, gradients, bias_gradients, interactive):
         for i in range(len(self.layers)):
             if self.bias:
-                self.layers[i] = np.subtract(self.layers[i], self.learning_rate * gradients[i][:, :-1])
-                self.biases[i] = np.subtract(self.biases[i], self.learning_rate * gradients[i][:, -1])
-            else:
-                self.layers[i] = np.subtract(self.layers[i], self.learning_rate * gradients[i])
+                self.biases[i] = np.subtract(self.biases[i], self.learning_rate * bias_gradients[i])
+            self.layers[i] = np.subtract(self.layers[i], self.learning_rate * gradients[i])
             if interactive:
                 ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, i + 2)
                 plt.colorbar(ax.matshow(self.layers[i], cmap=plt.cm.Blues))
                 ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, len(self.layers) + i + 3)
                 if self.bias:
-                    plt.colorbar(ax.matshow(gradients[i][:, :-1], cmap=plt.cm.Blues))
+                    plt.colorbar(ax.matshow(gradients[i], cmap=plt.cm.Blues))
                     ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, 2 * len(self.layers) + i + 4)
                     plt.colorbar(ax.matshow(self.biases[i].reshape(len(self.biases[i]), 1), cmap=plt.cm.Blues))
                     ax.get_xaxis().set_visible(False)
                     ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, 3 * len(self.layers) + i + 5)
                     plt.colorbar(
-                        ax.matshow(gradients[i][:, -1].reshape(len(gradients[i][:, -1]), 1), cmap=plt.cm.Blues))
+                        ax.matshow(bias_gradients[i].reshape(len(bias_gradients[i]), 1), cmap=plt.cm.Blues))
                     ax.get_xaxis().set_visible(False)
                 else:
                     plt.colorbar(ax.matshow(gradients[i], cmap=plt.cm.Blues))
@@ -276,17 +267,11 @@ class Perceptron:
 
     def test_classification(self, testdata):
         samples = testdata.iloc[:, 0:-1].values
-        classes = testdata.iloc[:, -1].values
-        counter = 0
-        for i, sample in enumerate(samples):
-            desired_out = classes[i]
-            y, act, result = self.forward(sample)
+        classes = testdata.iloc[:, -1].values-1
+        y, act, result = self.forward(samples.T)
+        correct = np.sum(np.argmax(result, axis=0) == classes)
 
-            predicted = np.argmax(result, axis=0) + 1
-            if predicted == desired_out:
-                counter += 1
-
-        return counter / len(samples)
+        return correct / len(samples)
 
 
 def draw_classification(network, path):
@@ -421,7 +406,7 @@ def run_tests(tests, testdata, traindata):
         print(f'train accuracy: {train_accuracy}')
         print(f'test accuracy: {test_accuracy}')
 
-        # plot_accuracy(test["epochs"], train_accuracy, test_accuracy)
+        plot_accuracy(test["epochs"], train_accuracy, test_accuracy)
 
         # plot_errors(losses)
 
@@ -431,31 +416,31 @@ if __name__ == "__main__":
 
     tests = [
         {"problem_type": Perceptron.ProblemType.Classification,
-         "hidden_layers": [128, 16],
-         "activation": ReLU,
-         "dActivation": dReLU,
+         "hidden_layers": [300],
+         "activation": sigmoid,
+         "dActivation": dSigmoid,
          "SM_CE": True,
          "batch_size": 100,
-         "learning_rate": 0.1,
+         "learning_rate": 0.03,
          "momentum": 0.1,
-         "epochs": 1,
+         "epochs": 20,
          "bias": True
          },
-        {"problem_type": Perceptron.ProblemType.Classification,
-         "hidden_layers": [300],
-         "activation": ReLU,
-         "dActivation": dReLU,
-         "final": None,
-         "dFinal": None,
-         "loss": None,
-         "dLoss": None,
-         "SM_CE": True,
-         "batch_size": 3000,
-         "learning_rate": 0.1,
-         "momentum": 0.1,
-         "epochs": 2,
-         "bias": True
-         }
+        # {"problem_type": Perceptron.ProblemType.Classification,
+        #  "hidden_layers": [300],
+        #  "activation": ReLU,
+        #  "dActivation": dReLU,
+        #  "final": None,
+        #  "dFinal": None,
+        #  "loss": None,
+        #  "dLoss": None,
+        #  "SM_CE": True,
+        #  "batch_size": 3000,
+        #  "learning_rate": 0.1,
+        #  "momentum": 0.1,
+        #  "epochs": 2,
+        #  "bias": True
+        #  }
     ]
 
     run_tests(tests,
