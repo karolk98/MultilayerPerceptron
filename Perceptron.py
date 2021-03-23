@@ -116,7 +116,7 @@ class Perceptron:
         self.biases = []
         for index, size in enumerate(layer_sizes[1:]):
             size_prev = layer_sizes[index]
-            layer = np.random.randn(size, size_prev)
+            layer = np.random.randn(size, size_prev)/100
             self.layers.append(layer)
             if self.bias:
                 self.biases.append(np.zeros(size))
@@ -139,7 +139,7 @@ class Perceptron:
 
                 batch = samples[batch_start:batch_end].T
                 desired = np.zeros((self.classes, batch.shape[1]))
-                desired[classes[batch_start:batch_end]-1, np.arange(batch.shape[1])] = 1
+                desired[classes[batch_start:batch_end], np.arange(batch.shape[1])] = 1
                 y, activated, _ = self.forward(batch)
 
                 new_gradients, new_bias_gradients, loss = self.gradient(y, activated, desired)
@@ -165,6 +165,7 @@ class Perceptron:
                 err_train.append(etr)
                 ete = self.test_classification(self.testdata)
                 err_test.append(ete)
+                print(ete)
 
         return losses, err_train, err_test
 
@@ -241,7 +242,7 @@ class Perceptron:
                 plt.colorbar(ax.matshow(self.layers[i], cmap=plt.cm.Blues))
                 ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, len(self.layers) + i + 3)
                 if self.bias:
-                    plt.colorbar(ax.matshow(gradients[i], cmap=plt.cm.Blues))
+                    plt.colorbar(ax.matshow(gradients[i], cmap=plt.cm.Blues, aspect='auto'))
                     ax = self.fig.add_subplot(2 + 2 * self.bias, len(self.layers) + 1, 2 * len(self.layers) + i + 4)
                     plt.colorbar(ax.matshow(self.biases[i].reshape(len(self.biases[i]), 1), cmap=plt.cm.Blues))
                     ax.get_xaxis().set_visible(False)
@@ -250,19 +251,27 @@ class Perceptron:
                         ax.matshow(bias_gradients[i].reshape(len(bias_gradients[i]), 1), cmap=plt.cm.Blues))
                     ax.get_xaxis().set_visible(False)
                 else:
-                    plt.colorbar(ax.matshow(gradients[i], cmap=plt.cm.Blues))
+                    plt.colorbar(ax.matshow(gradients[i], cmap=plt.cm.Blues, aspect='auto'))
         if interactive:
             plt.show()
             input()
 
     def test_classification(self, testdata):
         samples = testdata.iloc[:, 0:-1].values
-        classes = testdata.iloc[:, -1].values-1
+        classes = testdata.iloc[:, -1].values
         y, act, result = self.forward(samples.T)
         correct = np.sum(np.argmax(result, axis=0) == classes)
 
         return correct / len(samples)
 
+def draw_first_mnist_layer(perceptron, neuron):
+    data = perceptron.layers[0][neuron, :]
+    data.shape = (28, 28)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    cax = ax.matshow(data, interpolation='nearest')
+    fig.colorbar(cax, cmap=plt.cm.Greys)
+    plt.show()
 
 def draw_classification(network, path):
     samples = pd.read_csv(path)
@@ -400,21 +409,28 @@ def run_tests(tests, testdata, traindata):
 
         plot_errors(losses)
 
+def plot_stats(path):
+    losses = np.loadtxt(os.path.join(path, "losses.csv"))
+    train_accuracy = np.loadtxt(os.path.join(path, "train_accuracy.csv"))
+    test_accuracy = np.loadtxt(os.path.join(path, "test_accuracy.csv"))
+    plot_accuracy(len(test_accuracy), train_accuracy, test_accuracy)
+
+    plot_errors(losses)
 
 if __name__ == "__main__":
     np.random.seed(1)
 
     tests = [
         {"problem_type": Perceptron.ProblemType.Classification,
-         "hidden_layers": [128, 16],
-         "activation": sigmoid,
-         "dActivation": dSigmoid,
+         "hidden_layers": [256],
+         "activation": ReLU,
+         "dActivation": dReLU,
          "SM_CE": True,
-         "batch_size": 100,
-         "learning_rate": 1e-5,
+         "batch_size": 50,
+         "learning_rate": 1e-4,
          "momentum": 0.9,
-         "epochs": 1000,
-         "bias": True
+         "epochs": 30,
+         "bias": False
          },
     ]
 
